@@ -94,7 +94,7 @@ const Sidebar: React.FC<SidebarProps> = ({
   };
 
   const StudentNav = () => (
-    <nav className="flex flex-col flex-grow p-4">
+    <nav className="flex flex-col flex-grow p-4 overflow-y-auto">
       <div className="space-y-1.5">
         <NavItem
           icon={<HomeIcon className="h-5 w-5" />}
@@ -214,7 +214,7 @@ const Sidebar: React.FC<SidebarProps> = ({
   );
 
   const TeacherNav = () => (
-    <nav className="flex-grow p-4 space-y-1.5">
+    <nav className="flex-grow p-4 space-y-1.5 overflow-y-auto">
       <NavItem
         icon={<LayoutGridIcon className="h-5 w-5" />}
         label="Classrooms"
