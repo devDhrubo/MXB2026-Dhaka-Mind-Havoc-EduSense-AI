@@ -1,10 +1,11 @@
 
 
-import React from 'react';
-import { Classroom, Assessment, ClassroomResource } from '../types';
-import Card from './Card';
+import React, { useEffect, useState } from 'react';
+import { unifiedDataService } from '../services/dataService';
+import { Assessment, Classroom, ClassroomResource } from '../types';
 import Button from './Button';
-import { BookOpenIcon, FileTextIcon } from './icons';
+import Card from './Card';
+import { BookOpenIcon, FileTextIcon, RefreshCwIcon } from './icons';
 
 interface StudentClassroomViewProps {
   classroom: Classroom;
@@ -16,7 +17,28 @@ interface StudentClassroomViewProps {
 }
 
 const StudentClassroomView: React.FC<StudentClassroomViewProps> = ({ classroom, assessments, resources, onStartAssessment, onSelectAssessment, onBackToDashboard }) => {
-  const assignedAssessments = assessments.filter(a => a.classId === classroom.id);
+  const [liveAssessments, setLiveAssessments] = useState<Assessment[]>(assessments);
+  const [isUpdating, setIsUpdating] = useState(false);
+
+  // Subscribe to real-time updates from unified data service
+  useEffect(() => {
+    const unsubscribe = unifiedDataService.subscribe((data) => {
+      const updatedAssessments = data.assessments.filter(a => a.classId === classroom.id);
+      setLiveAssessments(updatedAssessments);
+      setIsUpdating(true);
+      setTimeout(() => setIsUpdating(false), 500);
+    });
+
+    // Initial sync
+    const classAssessments = unifiedDataService.getClassAssessments(classroom.id);
+    if (classAssessments.length > 0) {
+      setLiveAssessments(classAssessments);
+    }
+
+    return unsubscribe;
+  }, [classroom.id]);
+
+  const assignedAssessments = liveAssessments.length > 0 ? liveAssessments : assessments.filter(a => a.classId === classroom.id);
   const classResources = resources.filter(r => r.classroomId === classroom.id);
 
   return (
@@ -24,12 +46,20 @@ const StudentClassroomView: React.FC<StudentClassroomViewProps> = ({ classroom, 
       <div className="max-w-5xl mx-auto">
         <button onClick={onBackToDashboard} className="text-sm font-semibold text-primary mb-6">&larr; Back to Dashboard</button>
         <header className="mb-8">
-            <div className="flex items-center">
-                <BookOpenIcon className="h-8 w-8 text-secondary mr-3" />
-                <div>
-                    <p className="text-lg text-neutral-medium">Classroom</p>
-                    <h1 className="text-3xl md:text-4xl font-bold font-display text-neutral-extradark">{classroom.name}</h1>
+            <div className="flex items-center justify-between">
+                <div className="flex items-center">
+                    <BookOpenIcon className="h-8 w-8 text-secondary mr-3" />
+                    <div>
+                        <p className="text-lg text-neutral-medium">Classroom</p>
+                        <h1 className="text-3xl md:text-4xl font-bold font-display text-neutral-extradark">{classroom.name}</h1>
+                    </div>
                 </div>
+                {isUpdating && (
+                  <div className="flex items-center text-sm text-secondary animate-pulse">
+                    <RefreshCwIcon className="h-4 w-4 mr-2 animate-spin" />
+                    Updating...
+                  </div>
+                )}
             </div>
         </header>
         
@@ -61,11 +91,16 @@ const StudentClassroomView: React.FC<StudentClassroomViewProps> = ({ classroom, 
             </Card>
 
             <Card>
-                <h2 className="text-2xl font-bold font-display text-neutral-extradark mb-6">Assigned Work</h2>
+                <div className="flex items-center justify-between mb-6">
+                  <h2 className="text-2xl font-bold font-display text-neutral-extradark">Assigned Work</h2>
+                  <span className="text-sm font-semibold text-secondary bg-secondary/10 px-3 py-1 rounded-full">
+                    {assignedAssessments.length} Active
+                  </span>
+                </div>
                 <div className="space-y-4">
                     {assignedAssessments.length > 0 ? (
                         assignedAssessments.map(assessment => (
-                            <div key={assessment.id} className="p-4 bg-white/50 rounded-xl border border-neutral-light/50 flex flex-col sm:flex-row items-start sm:items-center justify-between hover:border-primary transition-colors duration-200 group">
+                            <div key={assessment.id} className={`p-4 bg-white/50 rounded-xl border border-neutral-light/50 flex flex-col sm:flex-row items-start sm:items-center justify-between hover:border-primary transition-all duration-200 group ${isUpdating ? 'animate-pulse' : ''}`}>
                                 <div 
                                     className="flex-grow cursor-pointer" 
                                     onClick={() => onSelectAssessment(assessment)}

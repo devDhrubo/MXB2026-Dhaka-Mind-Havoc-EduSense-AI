@@ -1,10 +1,10 @@
-import React from 'react';
-import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
-import { User } from '../types';
-import { mockStudentSkills, mockClassAverages, mockStudentPerformanceHistory, mockStudentRecentActivity } from '../data';
+import React, { useEffect, useState } from 'react';
+import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { mockClassAverages, mockStudentPerformanceHistory, mockStudentRecentActivity, mockStudentSkills } from '../data';
+import { unifiedDataService } from '../services/dataService';
+import { Submission, User } from '../types';
 import Card from './Card';
-import ProgressBar from './ProgressBar';
-import { CheckSquareIcon, TrophyIcon, ClockIcon, BarChartIcon, TrendingUpIcon, SparklesIcon, BookOpenIcon, DumbbellIcon } from './icons';
+import { BarChartIcon, BookOpenIcon, CheckSquareIcon, ClockIcon, DumbbellIcon, InfoIcon, RefreshCwIcon, SparklesIcon, TrendingUpIcon, TrophyIcon } from './icons';
 
 interface StudentDetailViewProps {
     student: User;
@@ -40,23 +40,52 @@ const StudentDetailView: React.FC<StudentDetailViewProps> = ({ student, onBack }
     const studentSkills = mockStudentSkills; 
     const performanceHistory = mockStudentPerformanceHistory;
     const recentActivity = mockStudentRecentActivity;
+    const [studentSubmissions, setStudentSubmissions] = useState<Submission[]>([]);
+    const [isUpdating, setIsUpdating] = useState(false);
+
+    // Subscribe to real-time submission updates
+    useEffect(() => {
+        const unsubscribe = unifiedDataService.subscribe((data) => {
+            const submissions = data.submissions.filter(s => s.studentId === student.id);
+            setStudentSubmissions(submissions);
+            setIsUpdating(true);
+            setTimeout(() => setIsUpdating(false), 500);
+        });
+
+        // Initial sync
+        const submissions = unifiedDataService.getStudentSubmissions(student.id);
+        if (submissions.length > 0) {
+            setStudentSubmissions(submissions);
+        }
+
+        return unsubscribe;
+    }, [student.id]);
 
     const activityIcons = {
         assessment: <CheckSquareIcon className="h-5 w-5 text-success" />,
         learning: <BookOpenIcon className="h-5 w-5 text-secondary" />,
         practice: <DumbbellIcon className="h-5 w-5 text-warning" />,
+        feedback: <InfoIcon className="h-5 w-5 text-primary" />,
     };
 
     return (
         <div className="min-h-screen p-4 sm:p-6 lg:p-8 animate-fade-in">
             <div className="max-w-6xl mx-auto">
                 <button onClick={onBack} className="text-sm font-semibold text-primary mb-6">&larr; Back to Classroom</button>
-                <header className="flex items-center mb-8">
-                    <img src={student.avatar} alt={student.name} className="h-20 w-20 rounded-full mr-6 border-4 border-white shadow-lg" />
-                    <div>
-                        <h1 className="text-3xl md:text-4xl font-bold font-display text-neutral-extradark">{student.name}</h1>
-                        <p className="text-lg text-neutral-medium mt-1">{student.email}</p>
+                <header className="flex items-center justify-between mb-8">
+                    <div className="flex items-center">
+                        <img src={student.avatar} alt={student.name} className="h-20 w-20 rounded-full mr-6 border-4 border-white shadow-lg" />
+                        <div>
+                            <h1 className="text-3xl md:text-4xl font-bold font-display text-neutral-extradark">{student.name}</h1>
+                            <p className="text-lg text-neutral-medium mt-1">{student.email}</p>
+                        </div>
                     </div>
+                    {isUpdating && (
+                      <div className="flex items-center text-sm text-secondary animate-pulse">
+                        <RefreshCwIcon className="h-4 w-4 mr-2 animate-spin" />
+                        Updating...
+                      </div>
+                    )}
                 </header>
                 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
@@ -126,19 +155,37 @@ const StudentDetailView: React.FC<StudentDetailViewProps> = ({ student, onBack }
                         </div>
                     </Card>
                     <Card className="lg:col-span-2">
-                         <h2 className="text-xl font-bold font-display text-neutral-extradark mb-4">Recent Activity</h2>
-                         <div className="space-y-4">
-                            {recentActivity.map((activity, index) => (
-                                <div key={index} className="flex items-start">
-                                    <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 mr-4 bg-gradient-to-br from-primary/10 to-secondary/10`}>
-                                        {activityIcons[activity.type]}
+                         <h2 className="text-xl font-bold font-display text-neutral-extradark mb-4">Recent Submissions</h2>
+                         <div className="space-y-4 max-h-96 overflow-y-auto">
+                            {studentSubmissions.length > 0 ? (
+                                studentSubmissions.map((submission) => (
+                                    <div key={submission.id} className="flex items-start p-3 bg-white/50 rounded-lg border border-neutral-light/50 hover:border-primary transition-colors">
+                                        <div className="w-10 h-10 rounded-full flex items-center justify-center shrink-0 mr-3 bg-gradient-to-br from-primary/10 to-secondary/10">
+                                            <CheckSquareIcon className="h-5 w-5 text-primary" />
+                                        </div>
+                                        <div className="flex-grow">
+                                            <p className="font-semibold text-neutral-dark">Assessment Completed</p>
+                                            <p className="text-xs text-neutral-medium">Score: <span className="font-bold text-primary">{submission.result.percentage.toFixed(1)}%</span></p>
+                                            {submission.feedback && (
+                                                <div className="mt-2 p-2 bg-secondary/5 rounded border-l-2 border-secondary">
+                                                    <p className="text-xs font-semibold text-secondary mb-1 flex items-center">
+                                                        <InfoIcon className="h-3 w-3 mr-1" />
+                                                        Teacher Feedback
+                                                    </p>
+                                                    <p className="text-xs text-neutral-dark">{submission.feedback.comments}</p>
+                                                    {submission.feedback.grade !== undefined && (
+                                                        <p className="text-xs font-bold text-secondary mt-1">Grade: {submission.feedback.grade}/100</p>
+                                                    )}
+                                                </div>
+                                            )}
+                                        </div>
                                     </div>
-                                    <div>
-                                        <p className="font-semibold text-neutral-dark">{activity.title}</p>
-                                        <p className="text-sm text-neutral-medium">{activity.detail} &middot; {activity.time}</p>
-                                    </div>
+                                ))
+                            ) : (
+                                <div className="text-center py-6">
+                                    <p className="text-sm text-neutral-medium">No submissions yet</p>
                                 </div>
-                            ))}
+                            )}
                          </div>
                     </Card>
                 </div>

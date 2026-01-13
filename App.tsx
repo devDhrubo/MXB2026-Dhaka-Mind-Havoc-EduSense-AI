@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import AcademicLevelSelectionView from "./components/AcademicLevelSelectionView";
 import AIGeneratorView from "./components/AIGeneratorView";
 import { AITutor } from "./components/AITutor";
@@ -51,6 +51,7 @@ import {
   teacherOnboardingSteps,
 } from "./data";
 import { generateQuizQuestions } from "./services/aiService";
+import { unifiedDataService } from "./services/dataService";
 import {
   Assessment,
   Classroom,
@@ -133,9 +134,49 @@ const App: React.FC = () => {
     useState(false);
 
   // Centralized state for classrooms and students
-  const [classrooms, setClassrooms] = useState<Classroom[]>(mockClassrooms);
-  const [students, setStudents] = useState<User[]>(mockStudents);
-  const [assessments, setAssessments] = useState<Assessment[]>(mockAssessments);
+  const [classrooms, setClassrooms] = useState<Classroom[]>(() => {
+    try {
+      const saved = localStorage.getItem("edusense_classrooms");
+      if (saved && saved.trim()) {
+        const parsed = JSON.parse(saved);
+        // Verify data is valid
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed;
+        }
+      }
+    } catch (e) {
+      console.error("Failed to load classrooms from localStorage:", e);
+    }
+    return mockClassrooms;
+  });
+  const [students, setStudents] = useState<User[]>(() => {
+    try {
+      const saved = localStorage.getItem("edusense_students");
+      if (saved && saved.trim()) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed;
+        }
+      }
+    } catch (e) {
+      console.error("Failed to load students from localStorage:", e);
+    }
+    return mockStudents;
+  });
+  const [assessments, setAssessments] = useState<Assessment[]>(() => {
+    try {
+      const saved = localStorage.getItem("edusense_assessments");
+      if (saved && saved.trim()) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed;
+        }
+      }
+    } catch (e) {
+      console.error("Failed to load assessments from localStorage:", e);
+    }
+    return mockAssessments;
+  });
   const [questions, setQuestions] = useState<Question[]>(mockQuestions);
   const [selectedClass, setSelectedClass] = useState<Classroom | null>(null);
   const [resources, setResources] =
@@ -178,7 +219,20 @@ const App: React.FC = () => {
   );
 
   // Teacher specific state
-  const [submissions, setSubmissions] = useState<Submission[]>(mockSubmissions);
+  const [submissions, setSubmissions] = useState<Submission[]>(() => {
+    try {
+      const saved = localStorage.getItem("edusense_submissions");
+      if (saved && saved.trim()) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          return parsed;
+        }
+      }
+    } catch (e) {
+      console.error("Failed to load submissions from localStorage:", e);
+    }
+    return mockSubmissions;
+  });
   const [selectedAssessmentForInsight, setSelectedAssessmentForInsight] =
     useState<string | null>(null);
 
@@ -192,6 +246,44 @@ const App: React.FC = () => {
       );
   }, [user, allNotifications]);
 
+  // Sync state with unified data service for real-time updates
+  useEffect(() => {
+    unifiedDataService.updateAssessments(assessments);
+    unifiedDataService.updateSubmissions(submissions);
+    unifiedDataService.updateClassrooms(classrooms);
+  }, [assessments, submissions, classrooms]);
+
+  // Subscribe to data changes from the unified service
+  useEffect(() => {
+    const unsubscribe = unifiedDataService.subscribe((data) => {
+      // Update local state when unified data service changes
+      setAssessments(data.assessments);
+      setSubmissions(data.submissions);
+      setClassrooms(data.classrooms);
+    });
+    return unsubscribe;
+  }, []);
+
+  // Persist classrooms to localStorage
+  useEffect(() => {
+    localStorage.setItem("edusense_classrooms", JSON.stringify(classrooms));
+  }, [classrooms]);
+
+  // Persist students to localStorage
+  useEffect(() => {
+    localStorage.setItem("edusense_students", JSON.stringify(students));
+  }, [students]);
+
+  // Persist assessments to localStorage
+  useEffect(() => {
+    localStorage.setItem("edusense_assessments", JSON.stringify(assessments));
+  }, [assessments]);
+
+  // Persist submissions to localStorage
+  useEffect(() => {
+    localStorage.setItem("edusense_submissions", JSON.stringify(submissions));
+  }, [submissions]);
+
   const handleLogin = (credentials: {
     email: string;
     pass: string;
@@ -200,7 +292,9 @@ const App: React.FC = () => {
     // In a real app, you'd validate credentials against a backend
     console.log(`Logging in as ${credentials.role} with ${credentials.email}`);
     if (credentials.role === "student") {
-      const studentUser = mockUser; // In real app, find user from 'students' list
+      // Check if user already exists in localStorage with updated data (e.g., joined classrooms)
+      const savedUser = localStorage.getItem("edusense_user");
+      const studentUser = savedUser ? JSON.parse(savedUser) : mockUser;
       setUser(studentUser);
       localStorage.setItem("edusense_user", JSON.stringify(studentUser));
       if (!studentUser.educationLevel) {
@@ -209,8 +303,11 @@ const App: React.FC = () => {
         setCurrentView("dashboard");
       }
     } else {
-      setUser(mockTeacher);
-      localStorage.setItem("edusense_user", JSON.stringify(mockTeacher));
+      // Check if teacher already exists in localStorage
+      const savedUser = localStorage.getItem("edusense_user");
+      const teacherUser = savedUser ? JSON.parse(savedUser) : mockTeacher;
+      setUser(teacherUser);
+      localStorage.setItem("edusense_user", JSON.stringify(teacherUser));
       setCurrentView("teacherDashboard");
     }
 
@@ -228,12 +325,15 @@ const App: React.FC = () => {
     email: string;
     pass: string;
   }) => {
+    // Use funny avatar styles from dicebear
+    const avatarStyles = ['avataaars', 'adventurer', 'pixel-art', 'fun-emoji', 'lorelei'];
+    const randomStyle = avatarStyles[Math.floor(Math.random() * avatarStyles.length)];
     const newStudent: User = {
       id: `usr_${Date.now()}`,
       name: signupData.name,
       email: signupData.email,
       role: "student",
-      avatar: `https://i.pravatar.cc/100?u=${signupData.email}`,
+      avatar: `https://api.dicebear.com/7.x/${randomStyle}/svg?seed=${signupData.email}`,
       stats: { assessmentsCompleted: 0, averageScore: 0, totalStudyTime: 0 },
       classIds: [],
       xp: 0,
@@ -427,8 +527,9 @@ const App: React.FC = () => {
         let updatedUser = applyXpAndLevelUp(user, xpGained);
         updatedUser = { ...updatedUser, streakDays: newStreak };
         setUser(updatedUser);
+        localStorage.setItem("edusense_user", JSON.stringify(updatedUser));
 
-        // Add to submissions
+        // Add to submissions and sync with unified data service
         const newSubmission: Submission = {
           id: `sub-${Date.now()}`,
           studentId: user.id,
@@ -437,6 +538,26 @@ const App: React.FC = () => {
           submittedAt: new Date().toISOString(),
         };
         setSubmissions((prev) => [...prev, newSubmission]);
+        
+        // Add to unified data service for real-time updates
+        unifiedDataService.addSubmission(newSubmission);
+
+        // Create notification for teacher about submission
+        const assessmentForNotif = assessments.find(a => a.id === assessment.id);
+        if (assessmentForNotif && assessmentForNotif.classId) {
+          const classroom = classrooms.find(c => c.id === assessmentForNotif.classId);
+          if (classroom && user) {
+            const teacherNotification: Notification = {
+              id: `notif-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+              userId: classroom.teacherId,
+              text: `Student ${user.name} completed assessment "${assessment.title}" with a score of ${finalResult.percentage.toFixed(1)}%.`,
+              timestamp: new Date().toISOString(),
+              read: false,
+            };
+            setAllNotifications((prev) => [...prev, teacherNotification]);
+            unifiedDataService.addNotification(teacherNotification);
+          }
+        }
       }
     }
 
@@ -533,6 +654,7 @@ const App: React.FC = () => {
     if (!user) return;
     const updatedUser = { ...user, iqLevel: newLevel };
     setUser(updatedUser);
+    localStorage.setItem("edusense_user", JSON.stringify(updatedUser));
     setStudents((prev) =>
       prev.map((s) => (s.id === user.id ? updatedUser : s))
     );
@@ -540,10 +662,9 @@ const App: React.FC = () => {
 
   const handleSpendXp = (cost: number) => {
     if (!user || user.role !== "student" || (user.xp ?? 0) < cost) return false;
-    setUser((prevUser) => {
-      if (!prevUser) return null;
-      return { ...prevUser, xp: (prevUser.xp ?? 0) - cost };
-    });
+    const updatedUser = { ...user, xp: (user.xp ?? 0) - cost };
+    setUser(updatedUser);
+    localStorage.setItem("edusense_user", JSON.stringify(updatedUser));
     return true;
   };
 
@@ -677,6 +798,51 @@ const App: React.FC = () => {
     );
   };
 
+  const handleDeleteClassroom = (classId: string) => {
+    if (!user || user.role !== "teacher") {
+      alert("Only teachers can delete classrooms.");
+      return { success: false, message: "Only teachers can delete classrooms." };
+    }
+
+    const classroom = classrooms.find((c) => c.id === classId);
+    if (!classroom) {
+      return { success: false, message: "Classroom not found." };
+    }
+
+    if (classroom.teacherId !== user.id) {
+      return { success: false, message: "You can only delete your own classrooms." };
+    }
+
+    // Remove classroom from all students
+    setStudents((prev) =>
+      prev.map((s) => ({
+        ...s,
+        classIds: (s.classIds || []).filter((id) => id !== classId),
+      }))
+    );
+
+    // Delete the classroom
+    setClassrooms((prev) => prev.filter((c) => c.id !== classId));
+
+    // Delete all assessments for this classroom
+    setAssessments((prev) => prev.filter((a) => a.classId !== classId));
+
+    // Delete all submissions for assessments in this classroom
+    const assessmentIds = assessments
+      .filter((a) => a.classId === classId)
+      .map((a) => a.id);
+    setSubmissions((prev) =>
+      prev.filter((s) => !assessmentIds.includes(s.assessmentId))
+    );
+
+    // Reset selected class if it was deleted
+    if (selectedClass?.id === classId) {
+      setSelectedClass(null);
+    }
+
+    return { success: true, message: "Classroom deleted successfully." };
+  };
+
   const handleCreateAndAssignAssessment = async (details: {
     title: string;
     subject: string;
@@ -744,6 +910,11 @@ const App: React.FC = () => {
       setAssessments((prev) => [...prev, ...newAssessments]);
       setQuestions((prev) => [...prev, ...allNewQuestions]);
 
+      // Update unified data service for real-time sync
+      newAssessments.forEach(assessment => {
+        unifiedDataService.addAssessment(assessment);
+      });
+
       const newStudentNotifications: Notification[] = [];
       newAssessments.forEach((assessment) => {
         const classroom = classrooms.find((c) => c.id === assessment.classId);
@@ -764,6 +935,11 @@ const App: React.FC = () => {
         });
       });
       setAllNotifications((prev) => [...prev, ...newStudentNotifications]);
+      
+      // Add notifications to unified service
+      newStudentNotifications.forEach(notif => {
+        unifiedDataService.addNotification(notif);
+      });
 
       alert(
         `${
@@ -813,6 +989,11 @@ const App: React.FC = () => {
 
     setAssessments((prev) => [...prev, ...newAssessments]);
 
+    // Update unified data service for real-time sync
+    newAssessments.forEach(assessment => {
+      unifiedDataService.addAssessment(assessment);
+    });
+
     const newStudentNotifications: Notification[] = [];
     newAssessments.forEach((assessment) => {
       const classroom = classrooms.find((c) => c.id === assessment.classId);
@@ -831,6 +1012,11 @@ const App: React.FC = () => {
       });
     });
     setAllNotifications((prev) => [...prev, ...newStudentNotifications]);
+    
+    // Add notifications to unified service
+    newStudentNotifications.forEach(notif => {
+      unifiedDataService.addNotification(notif);
+    });
 
     if (newAssessments.length > 0) {
       alert(
@@ -910,9 +1096,16 @@ const App: React.FC = () => {
   };
 
   const handleJoinClass = () => {
-    const classroom = classrooms.find((c) => c.classCode === joinClassCode);
+    if (!joinClassCode.trim()) {
+      alert("Please enter a classroom code.");
+      return;
+    }
+
+    const classroom = classrooms.find((c) => c.classCode.toUpperCase() === joinClassCode.trim().toUpperCase());
+    
     if (!classroom) {
-      alert("Invalid class code.");
+      const availableCodes = classrooms.map(c => c.classCode).join(", ");
+      alert(`Invalid class code.\n\nAvailable codes: ${availableCodes || "No classrooms available"}`);
       return;
     }
     if (!user || user.role !== "student") return;
@@ -931,13 +1124,13 @@ const App: React.FC = () => {
           : c
       )
     );
-    setUser((prevUser) => {
-      if (!prevUser) return null;
-      return {
-        ...prevUser,
-        classIds: [...(prevUser.classIds || []), classroom.id],
-      };
-    });
+    
+    const updatedUser = {
+      ...user,
+      classIds: [...(user.classIds || []), classroom.id],
+    };
+    setUser(updatedUser);
+    localStorage.setItem("edusense_user", JSON.stringify(updatedUser));
 
     alert(`Successfully joined ${classroom.name}!`);
     setJoinClassModalOpen(false);
@@ -1157,6 +1350,7 @@ const App: React.FC = () => {
             onCreateClass={handleCreateClass}
             onAddStudent={handleAddStudent}
             onRemoveStudent={handleRemoveStudent}
+            onDeleteClass={handleDeleteClassroom}
             onCreateAssessment={handleCreateAndAssignAssessment}
             onCreateManualAssessment={handleCreateManualAssessment}
             academicSubjects={academicSubjects}

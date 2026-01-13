@@ -1,11 +1,11 @@
 import React, { useMemo } from 'react';
-import { ResponsiveContainer, AreaChart, Area, Tooltip as RechartsTooltip } from 'recharts';
-import { User, Result, StudentSkill } from '../types';
+import { Area, AreaChart, Tooltip as RechartsTooltip, ResponsiveContainer } from 'recharts';
 import { View } from '../App';
 import { mockStudentPerformanceHistory } from '../data';
-import Card from './Card';
+import { Result, StudentSkill, User } from '../types';
 import Button from './Button';
-import { SparklesIcon, TrendingUpIcon, TrendingDownIcon, BookOpenIcon, GlobeIcon, TargetIcon, CheckSquareIcon, FlameIcon, ArrowRightIcon, TrophyIcon, ClockIcon, BrainCircuitIcon } from './icons';
+import Card from './Card';
+import { ArrowRightIcon, BrainCircuitIcon, CheckSquareIcon, ClockIcon, FlameIcon, GlobeIcon, MicIcon, PlayCircleIcon, SparklesIcon, TargetIcon, TrendingDownIcon, TrendingUpIcon, TrophyIcon } from './icons';
 import RadialProgressBar from './RadialProgressBar';
 
 interface DashboardViewProps {
@@ -55,10 +55,101 @@ const DashboardView: React.FC<DashboardViewProps> = ({ user, lastResult, handleN
 
   return (
     <>
-      <div className="mb-10">
+            {/* Modern Hero Section */}
+            <section className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-primary to-secondary text-white p-6 md:p-10 shadow-xl mb-10">
+                <div className="absolute inset-0 opacity-20">
+                    <div className="bg-aurora w-full h-full animate-aurora-bg"></div>
+                </div>
+                <div className="relative z-10 flex flex-col md:flex-row items-center md:items-start gap-8">
+                    <div className="flex-1">
+                        <div className="inline-flex items-center px-3 py-1 rounded-full bg-white/20 text-white text-xs font-semibold mb-4 animate-fade-in">
+                            <SparklesIcon className="h-4 w-4 mr-2" />
+                            Personalized, adaptive, and fun
+                        </div>
+                        <h1 className="text-3xl md:text-5xl font-display font-bold leading-tight animate-fade-in-up">
+                            Ignite your learning, {user.name.split(' ')[0]}
+                        </h1>
+                        <p className="text-white/80 mt-3 md:text-lg max-w-xl animate-fade-in-up">
+                            Master skills faster with adaptive practice, real-world contexts, and an AI tutor by your side.
+                        </p>
+                        <div className="mt-6 flex flex-wrap gap-3 animate-fade-in-up">
+                            <Button onClick={() => handleNavigate('aiGenerator')} className="bg-white !text-neutral-extradark hover:!bg-white/90">
+                                <PlayCircleIcon className="h-5 w-5 mr-2" />
+                                Start Practice
+                            </Button>
+                            <Button variant="secondary" onClick={() => handleNavigate('dynamicLearningPath')} className="!bg-white/20 !text-white hover:!bg-white/30">
+                                Explore Learning Path
+                                <ArrowRightIcon className="h-5 w-5 ml-2" />
+                            </Button>
+                            <Button variant="outline" onClick={() => handleNavigate('voiceAssistant')} className="!border-white/50 !text-white hover:!bg-white/10">
+                                <MicIcon className="h-5 w-5 mr-2" />
+                                Ask the Assistant
+                            </Button>
+                        </div>
+                    </div>
+                    <div className="md:w-64 flex-shrink-0">
+                        <div className="bg-white/10 backdrop-blur-xl rounded-2xl p-6 border border-white/20 shadow-lg">
+                            <p className="text-sm font-semibold text-white/80">Current Level</p>
+                            <p className="text-5xl font-display font-bold">{level}</p>
+                            <p className="text-xs mt-2 text-white/70">{xp} XP · {Math.max(0, Math.round(xpToNextLevel - xp))} to next</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            {/* Feature Highlights */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
+                <div
+                    onClick={() => handleNavigate('aiGenerator')}
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleNavigate('aiGenerator'); }}
+                    className="group p-5 rounded-2xl bg-gradient-to-br from-secondary to-cyan-400 text-white cursor-pointer transform hover:-translate-y-1 transition-transform duration-300 shadow-lg hover:shadow-secondary/40 flex items-center gap-4"
+                >
+                    <div className="bg-white/20 p-3 rounded-xl">
+                        <BrainCircuitIcon className="h-8 w-8" />
+                    </div>
+                    <div>
+                        <h3 className="font-bold text-lg">Adaptive Practice</h3>
+                        <p className="text-sm text-white/80">Target growth areas with smart quizzes.</p>
+                    </div>
+                </div>
+                <div
+                    onClick={() => handleNavigate('realLifeAppContext')}
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleNavigate('realLifeAppContext'); }}
+                    className="group p-5 rounded-2xl bg-gradient-to-br from-primary to-indigo-400 text-white cursor-pointer transform hover:-translate-y-1 transition-transform duration-300 shadow-lg hover:shadow-primary/40 flex items-center gap-4"
+                >
+                    <div className="bg-white/20 p-3 rounded-xl">
+                        <GlobeIcon className="h-8 w-8" />
+                    </div>
+                    <div>
+                        <h3 className="font-bold text-lg">Real-World Contexts</h3>
+                        <p className="text-sm text-white/80">See how your skills apply.</p>
+                    </div>
+                </div>
+                <div
+                    onClick={() => handleNavigate('voiceAssistant')}
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleNavigate('voiceAssistant'); }}
+                    className="group p-5 rounded-2xl bg-gradient-to-br from-pink-500 to-rose-400 text-white cursor-pointer transform hover:-translate-y-1 transition-transform duration-300 shadow-lg hover:shadow-pink-500/40 flex items-center gap-4"
+                >
+                    <div className="bg-white/20 p-3 rounded-xl">
+                        <MicIcon className="h-8 w-8" />
+                    </div>
+                    <div>
+                        <h3 className="font-bold text-lg">Voice Assistant</h3>
+                        <p className="text-sm text-white/80">Get help hands-free, anytime.</p>
+                    </div>
+                </div>
+            </div>
+
+      {/* <div className="mb-10">
         <h1 className="text-3xl md:text-4xl font-bold font-display text-neutral-extradark">Welcome, {user.name.split(' ')[0]}!</h1>
         <p className="text-md md:text-lg text-neutral-medium mt-2 max-w-2xl">Your mission control for learning excellence.</p>
-      </div>
+      </div> */}
 
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
           <div className="lg:col-span-3 space-y-6">

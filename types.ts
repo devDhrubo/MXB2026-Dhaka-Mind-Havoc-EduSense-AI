@@ -98,12 +98,23 @@ export interface Result {
   questionResults: QuestionResult[];
 }
 
+export interface TeacherFeedback {
+  id: string;
+  submissionId: string;
+  teacherId: string;
+  comments: string;
+  grade?: number; // 0-100
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface Submission {
   id: string;
   studentId: string;
   assessmentId: string;
   result: Result;
   submittedAt: string;
+  feedback?: TeacherFeedback; // Teacher's feedback on this submission
 }
 
 export interface LearningRecommendation {
@@ -181,15 +192,15 @@ export interface ChatMessage {
   text: string;
   timestamp: string;
   attachment?:
-    | {
-        type: "image";
-        name: string;
-        data: string; // data URL for images
-      }
-    | {
-        type: "pdf";
-        name: string;
-      };
+  | {
+    type: "image";
+    name: string;
+    data: string; // data URL for images
+  }
+  | {
+    type: "pdf";
+    name: string;
+  };
   quiz?: {
     question: string;
     options: string[];

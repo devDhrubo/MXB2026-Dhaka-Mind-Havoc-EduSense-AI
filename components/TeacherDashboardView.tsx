@@ -1,12 +1,13 @@
 
 
-import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
-import { User, Classroom, Assessment, Submission, ClassroomResource } from '../types';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Bar, BarChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { View } from '../App';
-import Card from './Card';
+import { unifiedDataService } from '../services/dataService';
+import { Assessment, Classroom, ClassroomResource, Submission, User } from '../types';
 import Button from './Button';
-import { LayoutGridIcon, UserIcon, FileTextIcon, PlusCircleIcon, XCircleIcon, SparklesIcon, EditIcon, ChevronsDown, EyeIcon, BarChartIcon, UsersIcon, CheckCircleIcon, ChevronRightIcon, TrophyIcon, ActivityIcon, ClipboardListIcon, ClockIcon, CheckSquareIcon, UploadCloudIcon, Trash2Icon, CheckIcon } from './icons';
+import Card from './Card';
+import { ActivityIcon, BarChartIcon, CheckIcon, CheckSquareIcon, ChevronRightIcon, ChevronsDown, ClipboardListIcon, EditIcon, EyeIcon, FileTextIcon, LayoutGridIcon, PlusCircleIcon, SparklesIcon, Trash2Icon, TrophyIcon, UploadCloudIcon, UsersIcon, XCircleIcon } from './icons';
 import Modal from './Modal';
 import ProgressBar from './ProgressBar';
 
@@ -22,6 +23,7 @@ interface TeacherDashboardViewProps {
     onCreateClass: (name: string) => void;
     onAddStudent: (classId: string, studentEmail: string) => { success: boolean, message: string };
     onRemoveStudent: (classId: string, studentId: string) => void;
+    onDeleteClass: (classId: string) => { success: boolean, message: string };
     onCreateAssessment: (details: {
         title: string;
         subject: string;
@@ -72,7 +74,8 @@ const ClassList: React.FC<{
     submissions: Submission[];
     onCreateClass: (name: string) => void;
     onSelectClass: (classroom: Classroom) => void;
-}> = ({ classrooms, assessments, submissions, onCreateClass, onSelectClass }) => {
+    onDeleteClass: (classId: string) => { success: boolean, message: string };
+}> = ({ classrooms, assessments, submissions, onCreateClass, onSelectClass, onDeleteClass }) => {
     const [isCreateClassModalOpen, setCreateClassModalOpen] = useState(false);
     const [newClassName, setNewClassName] = useState('');
 
@@ -82,6 +85,17 @@ const ClassList: React.FC<{
             onCreateClass(newClassName.trim());
             setNewClassName('');
             setCreateClassModalOpen(false);
+        }
+    };
+
+    const handleDeleteClass = (classId: string, className: string) => {
+        if (window.confirm(`Are you sure you want to delete "${className}"? This will remove all students from this classroom and delete all associated assessments and submissions. This action cannot be undone.`)) {
+            const result = onDeleteClass(classId);
+            if (result.success) {
+                alert(`Classroom "${className}" has been deleted successfully.`);
+            } else {
+                alert(`Error: ${result.message}`);
+            }
         }
     };
 
@@ -130,11 +144,18 @@ const ClassList: React.FC<{
                                         </div>
                                     </div>
                                 </div>
-                                <div className="bg-black/5 p-4 mt-auto">
+                                <div className="bg-black/5 p-4 mt-auto space-y-2">
                                     <Button variant="secondary" onClick={() => onSelectClass(c)} className="w-full !py-2.5 group/btn">
                                         Open Dashboard
                                         <ChevronRightIcon className="w-4 h-4 ml-2 transition-transform group-hover/btn:translate-x-1"/>
                                     </Button>
+                                    <button 
+                                        onClick={() => handleDeleteClass(c.id, c.name)} 
+                                        className="w-full py-2 px-3 text-sm font-semibold text-red-600 hover:text-white bg-red-50 hover:bg-red-500 rounded-lg transition-colors duration-200 flex items-center justify-center gap-2 group"
+                                    >
+                                        <Trash2Icon className="h-4 w-4" />
+                                        Delete Class
+                                    </button>
                                 </div>
                             </Card>
                         );
@@ -197,20 +218,35 @@ const ClassDetail: React.FC<TeacherDashboardViewProps> = (props) => {
     const [assessmentModalStep, setAssessmentModalStep] = useState(1);
     const [newStudentEmail, setNewStudentEmail] = useState('');
     const [expandedAssessmentId, setExpandedAssessmentId] = useState<string | null>(null);
+    const [liveSubmissions, setLiveSubmissions] = useState<Submission[]>(submissions);
+    const [liveAssessments, setLiveAssessments] = useState<Assessment[]>(assessments);
+    const [isUpdating, setIsUpdating] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
     
     const [assessmentForm, setAssessmentForm] = useState({
         title: '', subject: '', topic: '', description: '', questionCount: 10, duration: 20,
         difficulty: 'medium' as 'easy' | 'medium' | 'hard', academicLevel: Object.keys(academicSubjects)[0] || 'University Level', classIds: new Set<string>(),
     });
+
+    // Subscribe to real-time updates from unified data service
+    useEffect(() => {
+        const unsubscribe = unifiedDataService.subscribe((data) => {
+            setLiveSubmissions(data.submissions);
+            setLiveAssessments(data.assessments);
+            setIsUpdating(true);
+            setTimeout(() => setIsUpdating(false), 500);
+        });
+
+        return unsubscribe;
+    }, []);
     
     const classData = useMemo(() => {
         if (!selectedClass) return null;
 
         const studentsInClass = students.filter(s => selectedClass.studentIds.includes(s.id));
-        const assessmentsForClass = assessments.filter(a => a.classId === selectedClass.id);
+        const assessmentsForClass = liveAssessments.filter(a => a.classId === selectedClass.id);
         const assessmentIds = new Set(assessmentsForClass.map(a => a.id));
-        const submissionsForClass = submissions.filter(s => assessmentIds.has(s.assessmentId));
+        const submissionsForClass = liveSubmissions.filter(s => assessmentIds.has(s.assessmentId));
         
         const totalPossibleSubmissions = studentsInClass.length * assessmentsForClass.length;
         const submissionRate = totalPossibleSubmissions > 0 ? (submissionsForClass.length / totalPossibleSubmissions) * 100 : 0;
@@ -241,7 +277,7 @@ const ClassDetail: React.FC<TeacherDashboardViewProps> = (props) => {
             studentsInClass, assessmentsForClass, submissionsForClass, submissionRate, classAverage,
             studentAverages, performanceDistribution
         };
-    }, [selectedClass, students, assessments, submissions]);
+    }, [selectedClass, students, liveAssessments, liveSubmissions]);
 
     const closeAndResetAssessmentModal = useCallback(() => {
         setCreateAssessmentModalOpen(false);
@@ -256,10 +292,10 @@ const ClassDetail: React.FC<TeacherDashboardViewProps> = (props) => {
     }, [selectedClass, academicSubjects]);
 
     useEffect(() => {
-        if (selectedClass) {
+        if (selectedClass && isCreateAssessmentModalOpen) {
             setAssessmentForm(prev => ({ ...prev, classIds: new Set([selectedClass.id]) }));
         }
-    }, [selectedClass]);
+    }, [selectedClass, isCreateAssessmentModalOpen]);
 
     const updateAssessmentForm = useCallback((field: keyof typeof assessmentForm, value: any) => {
         setAssessmentForm(prev => {
@@ -602,6 +638,11 @@ const ClassDetail: React.FC<TeacherDashboardViewProps> = (props) => {
                                 <div className="space-y-4 animate-fade-in">
                                     <h3 className="text-xl font-bold text-neutral-dark">Assign to Classrooms</h3>
                                     <p className="text-neutral-medium">Students in the selected classrooms will be notified.</p>
+                                    {selectedClass && assessmentForm.classIds.has(selectedClass.id) && (
+                                        <div className="p-3 bg-success/10 border border-success/30 rounded-lg text-sm text-success-dark">
+                                            ✓ <strong>{selectedClass.name}</strong> is selected
+                                        </div>
+                                    )}
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-h-64 overflow-y-auto p-1 -m-1">
                                         {classrooms.map(c => (
                                             <div key={c.id} onClick={() => handleClassCheckboxChange(c.id)} role="checkbox" aria-checked={assessmentForm.classIds.has(c.id)} className={`p-4 rounded-xl border-2 cursor-pointer transition-all relative ${assessmentForm.classIds.has(c.id) ? 'border-secondary bg-secondary/10 shadow-md' : 'bg-surface/50 border-neutral-light/50 hover:border-secondary/50'}`}>
@@ -681,6 +722,7 @@ const TeacherDashboardView: React.FC<TeacherDashboardViewProps> = (props) => {
                     classrooms={props.classrooms} 
                     onCreateClass={props.onCreateClass} 
                     onSelectClass={props.onSelectClass}
+                    onDeleteClass={props.onDeleteClass}
                     assessments={props.assessments}
                     submissions={props.submissions}
                   />
