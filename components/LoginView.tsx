@@ -48,7 +48,7 @@ const LandingHero: React.FC<{ onGetStarted: () => void }> = ({ onGetStarted }) =
         <div className="relative animate-fade-in-up" style={{ animationDelay: '0.2s' }}>
           <div className="aspect-[4/3] w-full rounded-3xl overflow-hidden shadow-xl border border-white/20 bg-aurora transition-all duration-500 hover:shadow-2xl hover:scale-[1.02] hover:border-white/40">
             <img
-              src="assets/home-model.png"
+              src="/home-model.png"
               alt="VR learning illustration"
               className="w-full h-full object-cover transition-transform duration-700 hover:scale-110"
             />
