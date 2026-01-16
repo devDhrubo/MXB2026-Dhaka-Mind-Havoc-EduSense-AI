@@ -1,9 +1,3 @@
-/**
- * Adaptive Content Engine (RAG - Retrieval Augmented Generation)
- * Uses student profile to select and generate personalized learning content
- * Integrates external curriculum data with Gemini API for dynamic generation
- */
-
 import { aiService } from "./aiService";
 import { UserLearningProfile } from "./userProfilingService";
 
