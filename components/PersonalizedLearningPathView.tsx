@@ -1,10 +1,10 @@
-import React, { useState } from 'react';
 import { Type } from "@google/genai";
-import { generateJsonContent } from '../services/aiService';
+import React, { useRef, useState } from 'react';
+import { generateJsonContent, generateTextContent } from '../services/aiService';
 import { LearningPlanTask, User } from '../types';
-import Card from './Card';
 import Button from './Button';
-import { SparklesIcon, RocketIcon, SearchIcon, BookOpenIcon, PlayCircleIcon, DumbbellIcon } from './icons';
+import Card from './Card';
+import { BookOpenIcon, DumbbellIcon, FileTextIcon, PlayCircleIcon, RocketIcon, SearchIcon, SparklesIcon, UploadCloudIcon, XIcon } from './icons';
 
 interface PersonalizedLearningPathViewProps {
   user: User;
@@ -29,6 +29,151 @@ const taskIcons = {
 };
 
 // --- Sub-components ---
+
+const FileUploadSection: React.FC<{
+    onFileAnalyzed: (analysis: string, fileName: string) => void;
+    isAnalyzing: boolean;
+    error: string | null;
+}> = ({ onFileAnalyzed, isAnalyzing, error }) => {
+    const [uploadedFile, setUploadedFile] = useState<File | null>(null);
+    const fileInputRef = useRef<HTMLInputElement>(null);
+
+    const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        // Check file size (max 10MB)
+        if (file.size > 10 * 1024 * 1024) {
+            alert('File size must be less than 10MB');
+            return;
+        }
+
+        setUploadedFile(file);
+    };
+
+    const handleAnalyze = async () => {
+        if (!uploadedFile) return;
+
+        try {
+            const fileContent = await readFileContent(uploadedFile);
+            onFileAnalyzed(fileContent, uploadedFile.name);
+        } catch (error) {
+            console.error('Error reading file:', error);
+            alert('Failed to read the file. Please try again.');
+        }
+    };
+
+    const readFileContent = (file: File): Promise<string> => {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            
+            reader.onload = (e) => {
+                const result = e.target?.result as string;
+                resolve(result);
+            };
+            
+            reader.onerror = () => reject(new Error('Failed to read file'));
+            
+            // For text files, read as text
+            if (file.type.startsWith('text/') || 
+                file.name.endsWith('.txt') || 
+                file.name.endsWith('.md') ||
+                file.name.endsWith('.json') ||
+                file.name.endsWith('.csv')) {
+                reader.readAsText(file);
+            } else if (file.type === 'application/pdf' || 
+                       file.type === 'application/msword' ||
+                       file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
+                // For binary files, we'll send a message about the file
+                resolve(`[File: ${file.name}, Type: ${file.type}, Size: ${(file.size / 1024).toFixed(2)}KB]`);
+            } else {
+                reject(new Error('Unsupported file type'));
+            }
+        });
+    };
+
+    const handleRemoveFile = () => {
+        setUploadedFile(null);
+        if (fileInputRef.current) {
+            fileInputRef.current.value = '';
+        }
+    };
+
+    return (
+        <Card className="p-6 mb-6">
+            <div className="flex items-start gap-4">
+                <div className="flex-shrink-0 w-12 h-12 bg-gradient-to-br from-purple-500 to-pink-500 rounded-xl flex items-center justify-center">
+                    <UploadCloudIcon className="w-6 h-6 text-white" />
+                </div>
+                <div className="flex-grow">
+                    <h3 className="text-lg font-bold text-neutral-extradark mb-2">Upload Your Study Material</h3>
+                    <p className="text-sm text-neutral-medium mb-4">
+                        Upload notes, assignments, or study materials. Our AI will analyze them and create a personalized learning plan.
+                    </p>
+                    
+                    {!uploadedFile ? (
+                        <div>
+                            <input
+                                ref={fileInputRef}
+                                type="file"
+                                onChange={handleFileSelect}
+                                accept=".txt,.md,.pdf,.doc,.docx,.json,.csv,text/*"
+                                className="hidden"
+                                id="file-upload"
+                            />
+                            <label htmlFor="file-upload">
+                                <div className="border-2 border-dashed border-neutral-light rounded-xl p-6 text-center cursor-pointer hover:border-primary hover:bg-primary/5 transition-colors">
+                                    <UploadCloudIcon className="w-10 h-10 text-neutral-medium mx-auto mb-2" />
+                                    <p className="text-sm font-semibold text-neutral-dark">
+                                        Click to upload or drag and drop
+                                    </p>
+                                    <p className="text-xs text-neutral-medium mt-1">
+                                        TXT, MD, PDF, DOC, DOCX, JSON, CSV (max 10MB)
+                                    </p>
+                                </div>
+                            </label>
+                        </div>
+                    ) : (
+                        <div className="space-y-3">
+                            <div className="flex items-center gap-3 p-3 bg-neutral-ultralight rounded-lg">
+                                <FileTextIcon className="w-6 h-6 text-primary flex-shrink-0" />
+                                <div className="flex-grow min-w-0">
+                                    <p className="text-sm font-semibold text-neutral-dark truncate">
+                                        {uploadedFile.name}
+                                    </p>
+                                    <p className="text-xs text-neutral-medium">
+                                        {(uploadedFile.size / 1024).toFixed(2)} KB
+                                    </p>
+                                </div>
+                                <button
+                                    onClick={handleRemoveFile}
+                                    className="flex-shrink-0 p-1 hover:bg-neutral-light rounded-full transition-colors"
+                                >
+                                    <XIcon className="w-5 h-5 text-neutral-medium" />
+                                </button>
+                            </div>
+                            <Button
+                                onClick={handleAnalyze}
+                                disabled={isAnalyzing}
+                                className="w-full"
+                            >
+                                <SparklesIcon className="w-5 h-5 mr-2" />
+                                {isAnalyzing ? 'Analyzing...' : 'Analyze & Generate Plan'}
+                            </Button>
+                        </div>
+                    )}
+                    
+                    {error && (
+                        <p className="text-danger text-sm mt-3 flex items-center gap-2">
+                            <span className="inline-block w-1 h-1 bg-danger rounded-full"></span>
+                            {error}
+                        </p>
+                    )}
+                </div>
+            </div>
+        </Card>
+    );
+};
 
 const PlanGenerator: React.FC<{
     onGenerate: (topic: string) => void;
@@ -106,9 +251,55 @@ const PersonalizedLearningPathView: React.FC<PersonalizedLearningPathViewProps> 
     const [topic, setTopic] = useState('');
     const [learningPlan, setLearningPlan] = useState<LearningPlanTask[]>([]);
     const [isLoading, setIsLoading] = useState(false);
+    const [isAnalyzing, setIsAnalyzing] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [fileAnalysisError, setFileAnalysisError] = useState<string | null>(null);
+    const [analysisResult, setAnalysisResult] = useState<string>('');
 
-    const handleGeneratePlan = async (selectedTopic: string) => {
+    const handleFileAnalyzed = async (fileContent: string, fileName: string) => {
+        setIsAnalyzing(true);
+        setFileAnalysisError(null);
+        setError(null);
+        setAnalysisResult('');
+        
+        try {
+            // First, analyze the file content to extract key topics and learning areas
+            const analysisPrompt = `Analyze the following document content and provide:
+1. Main topics and concepts covered
+2. Student's current knowledge level based on the content
+3. Areas that need improvement or further study
+4. Recommended learning focus areas
+
+Document: ${fileName}
+Content: ${fileContent.substring(0, 5000)}
+
+Provide a clear, structured analysis that will help create a personalized learning plan.`;
+
+            const analysis = await generateTextContent(analysisPrompt);
+            setAnalysisResult(analysis);
+            
+            // Extract a topic for the learning plan
+            const topicExtractionPrompt = `Based on this analysis, suggest a single, concise topic (2-4 words) for a personalized learning plan:
+
+${analysis}
+
+Respond with ONLY the topic name, nothing else.`;
+
+            const extractedTopic = await generateTextContent(topicExtractionPrompt);
+            const cleanTopic = extractedTopic.trim().replace(/['"]/g, '');
+            
+            // Generate the learning plan based on the analysis
+            await handleGeneratePlan(cleanTopic, analysis);
+            
+        } catch (e) {
+            console.error("Failed to analyze file:", e);
+            setFileAnalysisError("Sorry, we couldn't analyze your file. Please try again or enter a topic manually.");
+        } finally {
+            setIsAnalyzing(false);
+        }
+    };
+
+    const handleGeneratePlan = async (selectedTopic: string, contextAnalysis?: string) => {
         if (!selectedTopic.trim()) {
             setError('Please enter a topic to generate a plan.');
             return;
@@ -142,7 +333,11 @@ const PersonalizedLearningPathView: React.FC<PersonalizedLearningPathViewProps> 
                 required: ["plan"]
             };
 
-            const prompt = `Create a personalized 7-day learning plan for a student at the ${user.educationLevel} level, focused on the topic "${selectedTopic}". Generate one task per day, varying the task type (video, read, practice). Each task should have a clear title, a brief description, and a relevant sub-topic related to the main topic "${selectedTopic}".`;
+            let prompt = `Create a personalized 7-day learning plan for a student at the ${user.educationLevel} level, focused on the topic "${selectedTopic}". Generate one task per day, varying the task type (video, read, practice). Each task should have a clear title, a brief description, and a relevant sub-topic related to the main topic "${selectedTopic}".`;
+            
+            if (contextAnalysis) {
+                prompt += `\n\nAdditional context from student's uploaded materials:\n${contextAnalysis}\n\nUse this context to tailor the learning plan to address specific gaps and build upon existing knowledge.`;
+            }
             
             const response = await generateJsonContent(prompt, schema);
             
@@ -163,6 +358,8 @@ const PersonalizedLearningPathView: React.FC<PersonalizedLearningPathViewProps> 
         setTopic('');
         setLearningPlan([]);
         setError(null);
+        setFileAnalysisError(null);
+        setAnalysisResult('');
     };
 
     return (
@@ -176,16 +373,49 @@ const PersonalizedLearningPathView: React.FC<PersonalizedLearningPathViewProps> 
             </header>
 
             <div className="max-w-4xl mx-auto">
-                {isLoading ? (
+                {/* File Upload Section - Always visible when no plan is generated */}
+                {!isLoading && learningPlan.length === 0 && (
+                    <FileUploadSection 
+                        onFileAnalyzed={handleFileAnalyzed}
+                        isAnalyzing={isAnalyzing}
+                        error={fileAnalysisError}
+                    />
+                )}
+
+                {/* Analysis Result Display */}
+                {analysisResult && learningPlan.length === 0 && !isLoading && (
+                    <Card className="p-6 mb-6 bg-gradient-to-br from-blue-50 to-purple-50">
+                        <h3 className="text-lg font-bold text-neutral-extradark mb-3 flex items-center gap-2">
+                            <SparklesIcon className="w-5 h-5 text-primary" />
+                            AI Analysis Results
+                        </h3>
+                        <div className="prose prose-sm max-w-none">
+                            <p className="text-neutral-dark whitespace-pre-wrap">{analysisResult}</p>
+                        </div>
+                    </Card>
+                )}
+
+                {isLoading || isAnalyzing ? (
                     <Card className="text-center p-12">
                         <SparklesIcon className="h-12 w-12 text-primary mx-auto animate-pulse" />
-                        <p className="mt-4 text-lg font-semibold text-neutral-dark">Crafting your plan for "{topic}"...</p>
+                        <p className="mt-4 text-lg font-semibold text-neutral-dark">
+                            {isAnalyzing ? 'Analyzing your file...' : `Crafting your plan for "${topic}"...`}
+                        </p>
                         <p className="text-neutral-medium mt-1">This may take a moment.</p>
                     </Card>
                 ) : learningPlan.length > 0 ? (
                     <LearningPlan topic={topic} plan={learningPlan} onReset={handleReset} />
                 ) : (
-                    <PlanGenerator onGenerate={handleGeneratePlan} error={error} />
+                    <>
+                        <div className="text-center mb-6">
+                            <div className="inline-flex items-center gap-2 text-sm text-neutral-medium">
+                                <div className="h-px bg-neutral-light flex-grow w-16"></div>
+                                <span>OR</span>
+                                <div className="h-px bg-neutral-light flex-grow w-16"></div>
+                            </div>
+                        </div>
+                        <PlanGenerator onGenerate={(topic) => handleGeneratePlan(topic)} error={error} />
+                    </>
                 )}
             </div>
         </>

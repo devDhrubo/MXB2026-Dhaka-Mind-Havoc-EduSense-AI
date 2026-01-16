@@ -18,7 +18,7 @@ const apiKey =
 if (!apiKey) {
   console.warn(
     "⚠️ Warning: Gemini API key is not set. AI features may not work. " +
-      "Set VITE_GEMINI_API_KEY in your .env file and restart the dev server."
+    "Set VITE_GEMINI_API_KEY in your .env file and restart the dev server."
   );
 } else {
   console.log(
@@ -392,7 +392,7 @@ Generate comprehensive recommendations that will help the student improve system
     console.error("Error generating learning recommendations:", error);
     throw new Error(
       error.message ||
-        "Failed to generate AI recommendations. Please try again."
+      "Failed to generate AI recommendations. Please try again."
     );
   }
 }
